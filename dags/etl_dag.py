@@ -1,8 +1,3 @@
-"""
-DAG: сбор данных с Московской биржи → JSON
-Конфиг читается из /opt/airflow/config/stocks.json
-Результат сохраняется в /opt/airflow/output/
-"""
 import json
 import requests
 from datetime import datetime, timedelta
@@ -30,7 +25,7 @@ OUTPUT_DIR = '/opt/airflow/output'
 
 
 def fetch_stock_data(**context):
-    execution_date = context['ds']  # Логическая дата DAG, например: '2025-02-06'
+    execution_date = context['ds']
 
     with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
         config = json.load(f)
@@ -77,6 +72,5 @@ def fetch_stock_data(**context):
 fetch_task = PythonOperator(
     task_id='fetch_moex_data',
     python_callable=fetch_stock_data,
-    provide_context=True,
     dag=dag,
 )
