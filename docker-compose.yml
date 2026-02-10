@@ -1,4 +1,24 @@
+version: '3.8'
 services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: airflow_clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    # ДОБАВЬ ВОТ ЭТУ СЕКЦИЮ:
+    environment:
+      - CLICKHOUSE_DB=default
+      - CLICKHOUSE_USER=airflow
+      - CLICKHOUSE_PASSWORD=airflow
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 10s
+      retries: 5
+
   postgres:
     image: postgres:13
     environment:
@@ -11,7 +31,6 @@ services:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 10s
       retries: 5
-      timeout: 30s
 
   airflow-init:
     image: apache/airflow:2.9.3
@@ -37,11 +56,13 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.basic_auth
-      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver
+      # Добавляем секретный ключ, чтобы сервисы доверяли друг другу
+      - AIRFLOW__WEBSERVER__SECRET_KEY=this_is_a_very_secure_secret_key
     volumes:
       - ./dags:/opt/airflow/dags
       - ./config:/opt/airflow/config
-      - ./output:/opt/airflow/output
+      - ./logs:/opt/airflow/logs  # <--- ВАЖНО: Общая папка логов
     ports:
       - "8080:8080"
     command: webserver
@@ -58,12 +79,15 @@ services:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - AIRFLOW__CORE__FERNET_KEY=46BKJoQYlPPOexq0OhDZnIlNepKFf87WFwLbfzqDDho=
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver
+      # Тот же ключ, что и у веб-сервера
+      - AIRFLOW__WEBSERVER__SECRET_KEY=this_is_a_very_secure_secret_key
     volumes:
       - ./dags:/opt/airflow/dags
       - ./config:/opt/airflow/config
-      - ./output:/opt/airflow/output
+      - ./logs:/opt/airflow/logs  # <--- ВАЖНО: Общая папка логов
     command: scheduler
 
 volumes:
   postgres_data:
+  clickhouse_data:
