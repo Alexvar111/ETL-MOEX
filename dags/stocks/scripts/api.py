@@ -11,17 +11,14 @@ def get_moex_data(ticker, start_date, end_date, interval):
         "interval": interval
     }
 
-    # 👇 ЭТО УБИРАТЬ НЕЛЬЗЯ! (Билет для прохода фейс-контроля)
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     try:
-        # Добавляем headers=headers
         response = requests.get(url, params=params, headers=headers, timeout=30)
         response.raise_for_status()
 
-        # Маленькая пауза всё же нужна, чтобы не спамить (правило хорошего тона)
         time.sleep(0.5)
 
         return response.json()
