@@ -1,5 +1,39 @@
 version: '3.8'
 services:
+  
+  # --- 1. Системная база (Только для Airflow) ---
+  postgres-airflow:
+    image: postgres:13
+    container_name: airflow_meta_db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 10s
+      retries: 5
+
+  # --- 2. Бизнес база (Staging Area для акций) ---
+  postgres-business:
+    image: postgres:13
+    container_name: business_data_db
+    environment:
+      POSTGRES_USER: data_eng        # Пользователь для данных
+      POSTGRES_PASSWORD: data_eng_pwd
+      POSTGRES_DB: staging_db        # База для данных
+    volumes:
+      - postgres_business_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # Важно! Наружу отдаем порт 5433, чтобы не путать с локальным Postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "data_eng"]
+      interval: 10s
+      retries: 5
+
+  # --- 3. ClickHouse (Аналитика) ---
   clickhouse:
     image: clickhouse/clickhouse-server:latest
     container_name: airflow_clickhouse
@@ -8,7 +42,6 @@ services:
       - "9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
-    # ДОБАВЬ ВОТ ЭТУ СЕКЦИЮ:
     environment:
       - CLICKHOUSE_DB=default
       - CLICKHOUSE_USER=airflow
@@ -19,75 +52,67 @@ services:
       interval: 10s
       retries: 5
 
-  postgres:
-    image: postgres:13
-    environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
-      interval: 10s
-      retries: 5
-
+  # --- 4. Airflow Init (Инициализация) ---
   airflow-init:
     image: apache/airflow:2.9.3
     depends_on:
-      postgres:
+      postgres-airflow:
         condition: service_healthy
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      # Подключаемся к postgres-airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
     entrypoint: /bin/bash
     command: -c "airflow db migrate && airflow users create --username admin --firstname Admin --lastname User --role Admin --email admin@example.com --password admin"
 
+  # --- 5. Airflow Webserver ---
   airflow-webserver:
     image: apache/airflow:2.9.3
     restart: always
     depends_on:
-      postgres:
+      postgres-airflow:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.basic_auth
-      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver
-      # Добавляем секретный ключ, чтобы сервисы доверяли друг другу
-      - AIRFLOW__WEBSERVER__SECRET_KEY=this_is_a_very_secure_secret_key
+      # 👇 ДОБАВЛЯЕМ БИБЛИОТЕКУ psycopg2-binary
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver psycopg2-binary
+      - AIRFLOW__WEBSERVER__SECRET_KEY=secure_key
     volumes:
       - ./dags:/opt/airflow/dags
       - ./config:/opt/airflow/config
-      - ./logs:/opt/airflow/logs  # <--- ВАЖНО: Общая папка логов
+      - ./logs:/opt/airflow/logs
     ports:
       - "8080:8080"
     command: webserver
 
+  # --- 6. Airflow Scheduler ---
   airflow-scheduler:
     image: apache/airflow:2.9.3
     restart: always
     depends_on:
-      postgres:
+      postgres-airflow:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres-airflow:5432/airflow
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver
-      # Тот же ключ, что и у веб-сервера
-      - AIRFLOW__WEBSERVER__SECRET_KEY=this_is_a_very_secure_secret_key
+      # 👇 И тут тоже добавляем библиотеку
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver psycopg2-binary
+      - AIRFLOW__WEBSERVER__SECRET_KEY=secure_key
     volumes:
       - ./dags:/opt/airflow/dags
       - ./config:/opt/airflow/config
-      - ./logs:/opt/airflow/logs  # <--- ВАЖНО: Общая папка логов
+      - ./logs:/opt/airflow/logs
     command: scheduler
 
 volumes:
-  postgres_data:
+  postgres_airflow_data: 
+  postgres_business_data: 
   clickhouse_data:

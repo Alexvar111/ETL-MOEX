@@ -1,69 +1,41 @@
-from datetime import datetime
-from clickhouse_driver import Client
 from stocks.scripts.api import get_moex_data
-from stocks.config import CLICKHOUSE_HOST
+from stocks.scripts.postgres_client import init_pg_table, clear_pg_data, insert_pg_data
+from stocks.scripts.clickhouse_client import init_ch_tables, clear_ch_data, transfer_data_from_pg
 
 
-CH_USER = 'airflow'
-CH_PASSWORD = 'airflow'
-
-
-def init_clickhouse():
-
-    client = Client(host=CLICKHOUSE_HOST, user=CH_USER, password=CH_PASSWORD)
-
-    query = """
-    CREATE TABLE IF NOT EXISTS stock_prices (
-        ticker String,
-        date Date,
-        open Float32,
-        close Float32,
-        high Float32,
-        low Float32,
-        volume Float32,
-        inserted_at DateTime DEFAULT now()
-    ) ENGINE = MergeTree()
-    ORDER BY (ticker, date)
-    """
-    client.execute(query)
-
-
-def fetch_and_load(ticker, interval, **context):
+def load_to_postgres(ticker, interval, **context):
 
     start_date = context["data_interval_start"].strftime('%Y-%m-%d')
     end_date = context["data_interval_end"].strftime('%Y-%m-%d')
 
-    print(f"Запуск для {ticker}. Период: {start_date} - {end_date}")
+    print(f"--- Запуск загрузки в Postgres: {ticker} ({start_date}) ---")
 
-    init_clickhouse()
+    init_pg_table()
 
     json_response = get_moex_data(ticker, start_date, end_date, interval)
+    candles = json_response.get('candles', {}).get('data', [])
 
-    candles_data = json_response.get('candles', {}).get('data', [])
-
-    if not candles_data:
-        print(f"Нет данных для {ticker} за этот период")
+    if not candles:
+        print("Данных нет, пропускаем.")
         return
 
-    rows_to_insert = []
-    for row in candles_data:
-        date_str = row[6].split(' ')[0]
+    clear_pg_data(ticker, start_date, end_date)
 
-        date_obj = datetime.strptime(date_str, '%Y-%m-%d').date()
+    insert_pg_data(ticker, candles)
 
-        rows_to_insert.append({
-            'ticker': ticker,
-            'date': date_obj,
-            'open': float(row[0]),
-            'close': float(row[1]),
-            'high': float(row[2]),
-            'low': float(row[3]),
-            'volume': float(row[5])
-        })
+    print(f"Успешно загружено строк: {len(candles)}")
 
-    client = Client(host=CLICKHOUSE_HOST, user=CH_USER, password=CH_PASSWORD)
-    client.execute(
-        'INSERT INTO stock_prices (ticker, date, open, close, high, low, volume) VALUES',
-        rows_to_insert
-    )
-    print(f"Успешно загружено {len(rows_to_insert)} строк.")
+
+def transfer_to_clickhouse(ticker, **context):
+    start_date = context["data_interval_start"].strftime('%Y-%m-%d')
+    end_date = context["data_interval_end"].strftime('%Y-%m-%d')
+
+    print(f"--- Запуск переноса в ClickHouse: {ticker} ({start_date}) ---")
+
+    init_ch_tables()
+
+    clear_ch_data(ticker, start_date, end_date)
+
+    transfer_data_from_pg(ticker, start_date, end_date)
+
+    print("Перенос успешно завершен.")
