@@ -15,14 +15,6 @@ def get_client():
 
 def init_ch_tables():
     client = get_client()
-    # ReplacingMergeTree(inserted_at):
-    #   - При слиянии частей данных ClickHouse оставляет по одной строке на каждую комбинацию
-    #     ORDER BY (у нас это ticker, date). Из нескольких строк с одинаковым (ticker, date)
-    #     остаётся та, у которой максимальное значение в скобках — inserted_at.
-    #   - Мутаций (ALTER TABLE ... DELETE) не используем: только INSERT. Повторный запуск DAG
-    #     за тот же интервал дат вставит дубликаты; при фоновом merge они схлопнутся в одну запись.
-    #   - До merge в выборке могут быть дубли — для гарантированной единственности читать
-    #     через FINAL: SELECT ... FROM stock_prices_analytical FINAL ...
     client.execute("""
         CREATE TABLE IF NOT EXISTS stock_prices_analytical (
             ticker String,
