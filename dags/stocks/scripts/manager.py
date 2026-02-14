@@ -1,6 +1,6 @@
 from stocks.scripts.api import get_moex_data
 from stocks.scripts.postgres_client import init_pg_table, clear_pg_data, insert_pg_data
-from stocks.scripts.clickhouse_client import init_ch_tables, clear_ch_data, transfer_data_from_pg
+from stocks.scripts.clickhouse_client import init_ch_tables, transfer_data_from_pg
 
 
 def load_to_postgres(ticker, interval, **context):
@@ -33,8 +33,6 @@ def transfer_to_clickhouse(ticker, **context):
     print(f"--- Запуск переноса в ClickHouse: {ticker} ({start_date}) ---")
 
     init_ch_tables()
-
-    clear_ch_data(ticker, start_date, end_date)
 
     transfer_data_from_pg(ticker, start_date, end_date)
 
