@@ -4,8 +4,8 @@ from airflow.providers.postgres.operators.postgres import PostgresOperator
 from datetime import datetime
 
 from stocks.config import tickers
-from stocks.operators.moex_to_pg_operator import MoexToPgOperator
-from stocks.operators.pg_to_ch_operator import PostgresToClickhouseOperator
+from operators.moex_to_pg_operator import MoexToPgOperator
+from operators.pg_to_ch_operator import PostgresToClickhouseOperator
 
 for ticker_info in tickers:
     ticker_code = ticker_info["ticker"]

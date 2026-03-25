@@ -5,6 +5,16 @@ from airflow.providers.postgres.hooks.postgres import PostgresHook
 
 
 class MoexToPgOperator(BaseOperator):
+    """
+    Кастомный оператор для выгрузки свечей акций с API Московской биржи (MOEX)
+    и их идемпотентной загрузки в staging-слой PostgreSQL.
+
+    :param ticker: Тикер акции на бирже (например, 'SBER', 'GAZP').
+    :param interval: Интервал свечи в минутах (например, 24 или 60).
+    :param api_start_date: Дата начала периода (формат YYYY-MM-DD).
+    :param api_end_date: Дата окончания периода (формат YYYY-MM-DD).
+    :param postgres_conn_id: ID подключения к PostgreSQL в Airflow Connections.
+    """
 
     template_fields = ('ticker', 'api_start_date', 'api_end_date')
 
@@ -25,6 +35,12 @@ class MoexToPgOperator(BaseOperator):
         self.postgres_conn_id = postgres_conn_id
 
     def execute(self, context):
+        """
+        Основной метод выполнения задачи.
+        Делает GET-запрос к API MOEX, парсит JSON и выполняет UPSERT (ON CONFLICT)
+        в целевую таблицу PostgreSQL через executemany.
+        """
+
         self.log.info(f"Запрашиваем API MOEX для {self.ticker} с {self.api_start_date} по {self.api_end_date}")
 
         url = f"https://iss.moex.com/iss/engines/stock/markets/shares/boards/TQBR/securities/{self.ticker}/candles.json"

@@ -86,6 +86,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./config:/opt/airflow/config
       - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
     ports:
       - "8080:8080"
     command: webserver
@@ -110,6 +111,7 @@ services:
       - ./dags:/opt/airflow/dags
       - ./config:/opt/airflow/config
       - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
     command: scheduler
 
 volumes:
