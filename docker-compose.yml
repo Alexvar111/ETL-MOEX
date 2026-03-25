@@ -80,7 +80,7 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       - AIRFLOW__API__AUTH_BACKEND=airflow.api.auth.backend.basic_auth
       # 👇 ДОБАВЛЯЕМ БИБЛИОТЕКУ psycopg2-binary
-      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver psycopg2-binary
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver psycopg2-binary airflow-clickhouse-plugin
       - AIRFLOW__WEBSERVER__SECRET_KEY=secure_key
     volumes:
       - ./dags:/opt/airflow/dags
@@ -104,7 +104,7 @@ services:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
       # 👇 И тут тоже добавляем библиотеку
-      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver psycopg2-binary
+      - _PIP_ADDITIONAL_REQUIREMENTS=clickhouse-driver psycopg2-binary airflow-clickhouse-plugin
       - AIRFLOW__WEBSERVER__SECRET_KEY=secure_key
     volumes:
       - ./dags:/opt/airflow/dags
